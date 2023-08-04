@@ -217,7 +217,8 @@ def today_responses(database_file, username):
             FROM users
             WHERE username = ? AND date(timestamp) = ?
             GROUP BY username, date(timestamp)
-            ORDER BY username, date(timestamp);
+            ORDER BY timestamp DESC
+            LIMIT 30;
         """, [username, username, today_date])
 
         # Fetch all grouped data
