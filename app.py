@@ -353,7 +353,7 @@ temperature=0.7
 """
                                     })
         final_output = ask_gpt_response(result[6:] + """separate
-                                        them with commas and 
+                                        them with commas and
                                         not in a numbered list format""")
 
         if result.startswith('AskGpt: '):
@@ -387,8 +387,8 @@ temperature=0.7
                     'channel_id': channel_id,
                     'message': command_contents
                                         })
-        profile_name = result[13:]
-        if result.startswith('profile_name='):
+        profile_name = result[14:]
+        if result.startswith('profile_name= '):
             gpt_latest_data = get_latest_data()
             result_string = ', '.join(str(item) for item in gpt_latest_data)
             keywords = extract_keywords(result_string)
@@ -417,7 +417,6 @@ temperature=0.7
 
         username = result[13:]
         if result.startswith('User_Summary:'):
-            print(username)
             grouped_data = group_responses_by_username_and_date("""user_data_17.db""", username)
             grouped_table = list_of_tuples_to_md_string_three_columns(grouped_data)
             driver.posts.create_post({
