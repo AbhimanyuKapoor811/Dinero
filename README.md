@@ -52,11 +52,8 @@ The bot uses an SQLite database to store user interaction logs. The `your_databa
    - Typing 'profile_name=' followed by a name and keywords separated by commas will create a keyword profile.
 
 3. Data Retrieval and Display:
-   - Typing 'Today_Summary' will display a summary of user interactions grouped by username and date.
-   - Typing 'ShowTable' will show all user interaction logs in tabular format.
-
-4. Statistics and Reports:
-   - Typing 'ShowStats:' followed by a username will display user-specific statistics and logs.
+   - Typing 'Today_Summary: @user_name ' will display a summary of user interactions grouped by username of that date.
+   - Typing 'User_Summary: @user_name' will display a summary of last 30 user interactions grouped by username and date.
 
 ## Important Notes
 
