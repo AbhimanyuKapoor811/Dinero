@@ -21,20 +21,13 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 fast_host_api_key = os.getenv('FASTHOST_API_KEY')
 
 
-def read_command_file(file_path):
-    try:
-        with open(file_path, 'r', encoding='utf-8') as command_file:
-            return command_file.read()
-    except FileNotFoundError:
-        print(f"File '{file_path}' not found.")
-        return None
-    except Exception as e:
-        print(f"An error occurred while reading the file: {e}")
-        return None
+def read_md_file_as_string(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        md_string = file.read()
+    return md_string
 
 
-# Replace 'path/to/readme.md' with the actual path to your readme.md file.
-command_contents = read_command_file('/home/akapoor/Final_Project/Commands.md')
+file_path = 'Commands.md'
 
 
 # Function to create the table
@@ -199,6 +192,34 @@ def group_responses_by_username_and_date(database_file, username):
         print(e)
 
 
+def group_responses(database_file):
+    conn = sqlite3.connect(database_file)
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        # Execute the SQL command with GROUP BY
+        cursor.execute("""
+            SELECT username, date(timestamp) AS response_date,
+                       COUNT(*) AS num_responses
+            FROM users
+            GROUP BY username, response_date;
+        """)
+
+        # Fetch all grouped data
+        grouped_data = cursor.fetchall()
+
+        # Close the connection
+        conn.close()
+
+        return grouped_data
+
+    except sqlite3.Error as e:
+        print(e)
+
+
 def today_responses(database_file, username):
     conn = sqlite3.connect(database_file)
     username = username.strip()
@@ -233,14 +254,76 @@ def today_responses(database_file, username):
         print(e)
 
 
+def user_today_responses(database_file, user_id):
+    conn = sqlite3.connect(database_file)
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        # Get today's date in the format 'YYYY-MM-DD'
+        today_date = date.today().isoformat()
+
+        # Execute the SQL command with the condition for today's date
+        cursor.execute("""
+            SELECT username, COUNT(*) AS num_responses
+            FROM users
+            WHERE user_id = ? AND date(timestamp) = ?
+            GROUP BY username, date(timestamp)
+            ORDER BY timestamp DESC
+            LIMIT 30;
+        """, [user_id, today_date])
+
+        # Fetch all grouped data
+        grouped_data = cursor.fetchall()
+
+        # Close the connection
+        conn.close()
+
+        return grouped_data
+
+    except sqlite3.Error as e:
+        print(e)
+
+
+def all_today_responses(database_file):
+    conn = sqlite3.connect(database_file)
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        # Execute the SQL command with the condition for today's date
+        cursor.execute("""
+            SELECT username, date(timestamp), COUNT(*) AS num_responses
+            FROM users
+            LIMIT 30;
+        """)
+
+        # Fetch all grouped data
+        grouped_data = cursor.fetchall()
+
+        # Close the connection
+        conn.close()
+
+        return grouped_data
+
+    except sqlite3.Error as e:
+        print(e)
+
+
 def markdownTable(data):
     # Extracting the headers from the first dictionary
     headers = data[0].keys()
 
     # Generate the Markdown table string
-    md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(["---"] * len(headers)) + " |\n"
+    md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(
+        ["---"] * len(headers)) + " |\n"
     for row in data:
-        md_table_string += "| " + " | ".join(str(value) for value in row.values()) + " |\n"
+        md_table_string += "| " + " | ".join(
+            str(value) for value in row.values()) + " |\n"
 
     # Print or use the md_table_string as needed
     return md_table_string
@@ -251,11 +334,14 @@ def list_of_tuples_to_md_string_three_columns(data):
     headers = ["UserName", "Date", "NumberofOpenAICalls"]
 
     # Generate the Markdown table string
-    md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(["---"] * len(headers)) + " |\n"
+    md_table_string_3 = "| " + " | ".join(
+        headers) + " |\n" + "| " + " | ".join(
+        ["---"] * len(headers)) + " |\n"
     for row in data:
-        md_table_string += "| " + " | ".join(str(value) for value in row) + " |\n"
+        md_table_string_3 += "| " + " | ".join(
+            str(value) for value in row) + " |\n"
 
-    return md_table_string
+    return md_table_string_3
 
 
 def list_of_tuples_to_md_string_two_columns(data):
@@ -263,9 +349,11 @@ def list_of_tuples_to_md_string_two_columns(data):
     headers = ["UserName", "NumberofOpenAICalls"]
 
     # Generate the Markdown table string
-    md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(["---"] * len(headers)) + " |\n"
+    md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(
+        ["---"] * len(headers)) + " |\n"
     for row in data:
-        md_table_string += "| " + " | ".join(str(value) for value in row) + " |\n"
+        md_table_string += "| " + " | ".join(
+            str(value) for value in row) + " |\n"
 
     return md_table_string
 
@@ -367,8 +455,8 @@ temperature=0.7
             driver.posts.create_post({
                 'channel_id': channel_id,
                 'message': """If you want to make a Keyword Profile,
-                start your message with profile_name= and type in the name
-                  with which you want to create the profile"""
+start your message with profile_name= and type in the name
+with which you want to create the profile"""
                                     })
             if user_id in last_response_to_user:
                 last_response_to_user[user_id] = (final_output)
@@ -382,11 +470,10 @@ temperature=0.7
                     'message': last_response_to_user[user_id]
                                         })
         if result == "Help" or result == "Manual":
-            if command_contents:
-                driver.posts.create_post({
-                    'channel_id': channel_id,
-                    'message': command_contents
-                                        })
+            driver.posts.create_post({
+                'channel_id': channel_id,
+                'message': read_md_file_as_string(file_path)
+                                    })
         profile_name = result[14:]
         if result.startswith('profile_name= '):
             gpt_latest_data = get_latest_data()
@@ -402,7 +489,8 @@ temperature=0.7
                         'Authorization': fast_host_api_key
                       }
 
-            response = requests.request("POST", url, headers=headers, data=payload)
+            response = requests.request(
+                "POST", url, headers=headers, data=payload)
 
             if response.status_code == 201:
                 driver.posts.create_post({
@@ -417,21 +505,46 @@ temperature=0.7
 
         username = result[13:]
         if result.startswith('User_Summary:'):
-            grouped_data = group_responses_by_username_and_date("""user_data_17.db""", username)
-            grouped_table = list_of_tuples_to_md_string_three_columns(grouped_data)
+            grouped_data = group_responses_by_username_and_date(
+                """user_data_17.db""", username)
+            grouped_table = list_of_tuples_to_md_string_three_columns(
+                grouped_data)
             driver.posts.create_post({
                 'channel_id': channel_id,
                 'message': grouped_table
             })
         today_username = username = result[14:]
+
         if result.startswith('Today_Summary:'):
             print(today_username)
-            grouped_data_1 = today_responses("""user_data_17.db""", today_username)
+            grouped_data_1 = today_responses(
+                """user_data_17.db""", today_username)
             print(type(grouped_data_1))
-            today_grouped_table = list_of_tuples_to_md_string_two_columns(grouped_data_1)
+            today_grouped_table = list_of_tuples_to_md_string_two_columns(
+                grouped_data_1)
             driver.posts.create_post({
                 'channel_id': channel_id,
                 'message': today_grouped_table
+            })
+
+        if result == 'Self_Summary':
+            print(user_id)
+            user_grouped_data = user_today_responses(
+                """user_data_17.db""", user_id)
+            user_today_data = list_of_tuples_to_md_string_two_columns(
+                user_grouped_data)
+            driver.posts.create_post({
+                'channel_id': channel_id,
+                'message': user_today_data
+            })
+
+        if result == 'All_Summary':
+            ata = group_responses("""user_data_17.db""")
+            str_ata = list_of_tuples_to_md_string_three_columns(
+                ata)
+            driver.posts.create_post({
+                'channel_id': channel_id,
+                'message': str_ata
             })
 
     driver.init_websocket(response_handler)
