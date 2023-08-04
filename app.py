@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 import json
 from mattermostdriver import Driver
 import sqlite3
-from datetime import datetime
+from datetime import datetime, date
 from time import sleep
 
 load_dotenv('credentials.env')
@@ -18,6 +18,7 @@ bot_password = os.getenv('BOT_PASSWORD')
 server_url = os.getenv('SERVER_URL')
 scheme = os.getenv('SCHEME')
 openai.api_key = os.getenv('OPENAI_API_KEY')
+fast_host_api_key = os.getenv('FASTHOST_API_KEY')
 
 
 def read_command_file(file_path):
@@ -167,24 +168,57 @@ def get_latest_data():
     return latest_data
 
 
-def group_responses_by_username_and_date(database_file):
+def group_responses_by_username_and_date(database_file, username):
     conn = sqlite3.connect(database_file)
+    username = username.strip()
     if not conn:
         return
 
     try:
         cursor = conn.cursor()
 
-        # Define the SQL command to group the responses by username and date (based on timestamp)
-        group_query = """
-            SELECT username, date(timestamp) AS response_date, COUNT(*) AS num_responses
+        # Execute the SQL command
+        cursor.execute("""
+            SELECT ?, date(timestamp) AS response_date,
+                       COUNT(*) AS num_responses
             FROM users
+            WHERE username = ?
             GROUP BY username, date(timestamp)
             ORDER BY username, date(timestamp);
-        """
+        """, [username, username])
 
-        # Execute the SQL command
-        cursor.execute(group_query)
+        # Fetch all grouped data
+        grouped_data = cursor.fetchall()
+
+        # Close the connection
+        conn.close()
+
+        return grouped_data
+
+    except sqlite3.Error as e:
+        print(e)
+
+
+def today_responses(database_file, username):
+    conn = sqlite3.connect(database_file)
+    username = username.strip()
+    if not conn:
+        return
+
+    try:
+        cursor = conn.cursor()
+
+        # Get today's date in the format 'YYYY-MM-DD'
+        today_date = date.today().isoformat()
+
+        # Execute the SQL command with the condition for today's date
+        cursor.execute("""
+            SELECT ?, COUNT(*) AS num_responses
+            FROM users
+            WHERE username = ? AND date(timestamp) = ?
+            GROUP BY username, date(timestamp)
+            ORDER BY username, date(timestamp);
+        """, [username, username, today_date])
 
         # Fetch all grouped data
         grouped_data = cursor.fetchall()
@@ -211,9 +245,21 @@ def markdownTable(data):
     return md_table_string
 
 
-def list_of_tuples_to_md_string(data):
+def list_of_tuples_to_md_string_three_columns(data):
     # Extracting the headers from the first tuple
-    headers = ["UserName", "Date", "NumberofIntents"]
+    headers = ["UserName", "Date", "NumberofOpenAICalls"]
+
+    # Generate the Markdown table string
+    md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(["---"] * len(headers)) + " |\n"
+    for row in data:
+        md_table_string += "| " + " | ".join(str(value) for value in row) + " |\n"
+
+    return md_table_string
+
+
+def list_of_tuples_to_md_string_two_columns(data):
+    # Extracting the headers from the first tuple
+    headers = ["UserName", "NumberofOpenAICalls"]
 
     # Generate the Markdown table string
     md_table_string = "| " + " | ".join(headers) + " |\n" + "| " + " | ".join(["---"] * len(headers)) + " |\n"
@@ -291,6 +337,7 @@ def main():
                             ' Please write your intent after typing '
                             '\"AskGpt:\" ')
                                     })
+
         if result.startswith('AskGptPayload'):
             driver.posts.create_post({
                 'channel_id': channel_id,
@@ -305,7 +352,8 @@ temperature=0.7
 """
                                     })
         final_output = ask_gpt_response(result[6:] + """separate
-                                        them with commas and not in a numbered list format""")
+                                        them with commas and 
+                                        not in a numbered list format""")
 
         if result.startswith('AskGpt: '):
             insert_data(user_id, user_name_message_json, result[7:],
@@ -319,7 +367,7 @@ temperature=0.7
                 'channel_id': channel_id,
                 'message': """If you want to make a Keyword Profile,
                 start your message with profile_name= and type in the name
-                  with which you want to crete the profile"""
+                  with which you want to create the profile"""
                                     })
             if user_id in last_response_to_user:
                 last_response_to_user[user_id] = (final_output)
@@ -350,7 +398,7 @@ temperature=0.7
                     }, indent=2, ensure_ascii=False)
             headers = {
                         'Content-Type': 'application/json',
-                        'Authorization': 'ApiKey Gauravvv:4fd1bcbd026d047c3465afd130159a1e70a4088c'
+                        'Authorization': fast_host_api_key
                       }
 
             response = requests.request("POST", url, headers=headers, data=payload)
@@ -366,28 +414,26 @@ temperature=0.7
                     'message': "Try again"
                                     })
 
-        if result.startswith('Today_Summary'):
-            grouped_data = group_responses_by_username_and_date("user_data_17.db")
-            grouped_table = list_of_tuples_to_md_string(grouped_data)
+        username = result[13:]
+        if result.startswith('User_Summary:'):
+            print(username)
+            grouped_data = group_responses_by_username_and_date("""user_data_17.db""", username)
+            grouped_table = list_of_tuples_to_md_string_three_columns(grouped_data)
             driver.posts.create_post({
                 'channel_id': channel_id,
                 'message': grouped_table
             })
+        today_username = username = result[14:]
+        if result.startswith('Today_Summary:'):
+            print(today_username)
+            grouped_data_1 = today_responses("""user_data_17.db""", today_username)
+            print(type(grouped_data_1))
+            today_grouped_table = list_of_tuples_to_md_string_two_columns(grouped_data_1)
+            driver.posts.create_post({
+                'channel_id': channel_id,
+                'message': today_grouped_table
+            })
 
-        if result.startswith('ShowTable'):
-            return_list = fetch_all_data()
-            driver.posts.create_post({
-                'channel_id': channel_id,
-                'message': markdownTable(return_list)
-                                    })
-        username = result[10:]
-        if result.startswith('ShowStats:'):
-            return_list = fetch_userdata_by_username("""user_data_17.db""",
-                                                     username)
-            driver.posts.create_post({
-                'channel_id': channel_id,
-                'message': markdownTable(return_list)
-                                    })
     driver.init_websocket(response_handler)
 
 
